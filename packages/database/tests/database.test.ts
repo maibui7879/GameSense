@@ -1,15 +1,30 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { GameSession, SystemMetrics } from "@gamesense/contracts";
 import { GameSenseDatabase } from "../src/index.js";
 
 const databases: GameSenseDatabase[] = [];
+const temporaryDirectories: string[] = [];
 
 afterEach(() => {
   for (const database of databases.splice(0)) database.close();
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 function createDatabase(): GameSenseDatabase {
   const database = new GameSenseDatabase();
+  databases.push(database);
+  return database;
+}
+
+function createFileDatabase(): GameSenseDatabase {
+  const directory = mkdtempSync(join(tmpdir(), "gamesense-db-"));
+  temporaryDirectories.push(directory);
+  const database = new GameSenseDatabase(join(directory, "gamesense.db"));
   databases.push(database);
   return database;
 }
@@ -55,6 +70,23 @@ describe("GameSenseDatabase", () => {
 
     expect(database.getSession(stopped.id)).toEqual(stopped);
     expect(database.getCurrentSession()).toBeNull();
+  });
+
+  it("persists sessions across close and reopen", () => {
+    const directory = mkdtempSync(join(tmpdir(), "gamesense-db-"));
+    temporaryDirectories.push(directory);
+    const filename = join(directory, "gamesense.db");
+    const first = new GameSenseDatabase(filename);
+    const saved = session();
+
+    first.saveSession(saved);
+    first.close();
+
+    const reopened = new GameSenseDatabase(filename);
+    databases.push(reopened);
+
+    expect(reopened.getSession(saved.id)).toEqual(saved);
+    expect(reopened.getCurrentSession()).toEqual(saved);
   });
 
   it("lists sessions newest first", () => {

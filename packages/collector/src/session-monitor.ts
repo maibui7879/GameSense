@@ -1,6 +1,7 @@
 import type {
   GameDefinition,
   GameSession,
+  SystemMetrics,
 } from "@gamesense/contracts";
 import { SessionManager } from "@gamesense/game-core";
 import {
@@ -14,12 +15,19 @@ export interface ProcessScanner {
   ): Promise<DetectedGameProcess[]>;
 }
 
+export interface MetricsCollector {
+  collect(): Promise<SystemMetrics>;
+}
+
 export interface SessionMonitorOptions {
   definitions: GameDefinition[];
   scanner?: ProcessScanner;
   sessionManager?: SessionManager;
+  initialSession?: GameSession | null;
+  metricsCollector?: MetricsCollector;
   intervalMs?: number;
   onSessionChange?: (session: GameSession | null) => void;
+  onMetrics?: (session: GameSession, metrics: SystemMetrics) => void;
   onError?: (error: unknown) => void;
 }
 
@@ -27,14 +35,20 @@ export class SessionMonitor {
   private readonly definitions: GameDefinition[];
   private readonly scanner: ProcessScanner;
   private readonly sessionManager: SessionManager;
+  private readonly metricsCollector?: MetricsCollector;
   private readonly intervalMs: number;
   private readonly onSessionChange?: (
     session: GameSession | null,
+  ) => void;
+  private readonly onMetrics?: (
+    session: GameSession,
+    metrics: SystemMetrics,
   ) => void;
   private readonly onError?: (error: unknown) => void;
 
   private timer: ReturnType<typeof setInterval> | null = null;
   private inFlight: Promise<void> | null = null;
+  private metricsInFlight: Promise<void> | null = null;
   private generation = 0;
 
   constructor(options: SessionMonitorOptions) {
@@ -42,8 +56,13 @@ export class SessionMonitor {
     this.scanner = options.scanner ?? new WindowsProcessScanner();
     this.sessionManager =
       options.sessionManager ?? new SessionManager();
+    if (options.initialSession) {
+      this.sessionManager.restoreSession(options.initialSession);
+    }
+    this.metricsCollector = options.metricsCollector;
     this.intervalMs = options.intervalMs ?? 2000;
     this.onSessionChange = options.onSessionChange;
+    this.onMetrics = options.onMetrics;
     this.onError = options.onError;
 
     if (this.intervalMs <= 0) {
@@ -140,6 +159,7 @@ export class SessionMonitor {
       : undefined;
 
     if (current && currentProcess) {
+      this.captureMetrics(current, generation);
       // Game vẫn chạy; giữ nguyên session hiện tại.
       return;
     }
@@ -167,5 +187,42 @@ export class SessionMonitor {
     );
 
     this.onSessionChange?.(started);
+    this.captureMetrics(started, generation);
+  }
+
+  private captureMetrics(
+    session: GameSession,
+    generation: number,
+  ): void {
+    if (
+      !this.metricsCollector ||
+      !this.onMetrics ||
+      this.metricsInFlight !== null
+    ) {
+      return;
+    }
+
+    const task = this.metricsCollector
+      .collect()
+      .then((metrics) => {
+        if (
+          generation === this.generation &&
+          this.sessionManager.getCurrentSession()?.id === session.id
+        ) {
+          this.onMetrics?.(session, metrics);
+        }
+      })
+      .catch((error: unknown) => {
+        if (generation === this.generation) {
+          this.onError?.(error);
+        }
+      })
+      .finally(() => {
+        if (this.metricsInFlight === task) {
+          this.metricsInFlight = null;
+        }
+      });
+
+    this.metricsInFlight = task;
   }
 }

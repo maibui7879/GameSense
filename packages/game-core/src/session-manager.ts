@@ -6,6 +6,18 @@ import type {
 export class SessionManager {
   private currentSession: GameSession | null = null;
 
+  restoreSession(session: GameSession): void {
+    if (session.status !== "running" || session.endedAt !== null) {
+      throw new Error("Only a running session can be restored.");
+    }
+
+    if (this.currentSession?.status === "running") {
+      throw new Error("A running session is already active.");
+    }
+
+    this.currentSession = { ...session };
+  }
+
   getCurrentSession(): GameSession | null {
     return this.currentSession
       ? { ...this.currentSession }

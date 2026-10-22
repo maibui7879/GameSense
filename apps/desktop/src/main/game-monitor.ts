@@ -1,6 +1,7 @@
 import {
   SessionMonitor,
-  STELLA_SORA
+  STELLA_SORA,
+  WindowsSystemMetricsCollector
 } from '@gamesense/collector'
 import type { GameSession } from '@gamesense/contracts'
 import { GameSenseDatabase } from '@gamesense/database'
@@ -39,14 +40,26 @@ export function startGameMonitor(persistence: GameSenseDatabase): void {
 
   database = persistence
 
+  const restoredSession = database.getCurrentSession()
+
   monitor = new SessionMonitor({
     definitions: [STELLA_SORA],
+    initialSession: restoredSession,
+    metricsCollector: new WindowsSystemMetricsCollector(),
     intervalMs: 2000,
 
     onSessionChange(session) {
       if (session === null) return
 
-      database?.saveSession(session)
+      try {
+        database?.saveSession(session)
+      } catch (error) {
+        console.error('[GameSense] Persistence failed:', error)
+        emit({
+          type: 'error',
+          message: 'KhÃ´ng thá»ƒ lÆ°u tráº¡ng thÃ¡i phiÃªn game.'
+        })
+      }
 
       emit({
         type: 'session-change',
@@ -56,12 +69,24 @@ export function startGameMonitor(persistence: GameSenseDatabase): void {
 
     onError(error) {
       // Chi tiết lỗi chỉ được ghi ở Main Process.
-      console.error('[GameSense] Process scan failed:', error)
+      console.error('[GameSense] Monitor operation failed:', error)
 
       emit({
         type: 'error',
         message: 'Không thể kiểm tra tiến trình game.'
       })
+    },
+
+    onMetrics(session, metrics) {
+      try {
+        database?.insertMetrics(session.id, metrics)
+      } catch (error) {
+        console.error('[GameSense] Metric persistence failed:', error)
+        emit({
+          type: 'error',
+          message: 'KhÃ´ng thá»ƒ lÆ°u chá»‰ sá»‘ hiá»‡u nÄƒng.'
+        })
+      }
     }
   })
 

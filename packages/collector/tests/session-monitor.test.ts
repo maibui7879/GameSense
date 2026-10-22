@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   GameDefinition,
   GameProcessInfo,
+  GameSession,
+  SystemMetrics,
 } from "@gamesense/contracts";
 import {
   SessionMonitor,
@@ -83,6 +85,74 @@ describe("SessionMonitor", () => {
     await monitor.pollOnce();
 
     expect(monitor.getCurrentSession()?.id).toBe(first?.id);
+  });
+
+  it("restores a persisted running session when the process is still active", async () => {
+    const scanner = createScanner(detected(15056));
+    const restored: GameSession = {
+      id: "persisted-session",
+      gameId: "stella-sora",
+      pid: 15056,
+      startedAt: "2026-10-21T10:00:00.000Z",
+      endedAt: null,
+      status: "running",
+    };
+    const monitor = new SessionMonitor({
+      definitions: [game],
+      scanner,
+      initialSession: restored,
+    });
+
+    await monitor.pollOnce();
+
+    expect(monitor.getCurrentSession()).toEqual(restored);
+  });
+
+  it("stops a restored session when its process is no longer active", async () => {
+    const scanner = createScanner([]);
+    const restored: GameSession = {
+      id: "persisted-session",
+      gameId: "stella-sora",
+      pid: 15056,
+      startedAt: "2026-10-21T10:00:00.000Z",
+      endedAt: null,
+      status: "running",
+    };
+    const monitor = new SessionMonitor({
+      definitions: [game],
+      scanner,
+      initialSession: restored,
+    });
+
+    await monitor.pollOnce();
+
+    expect(monitor.getCurrentSession()?.status).toBe("stopped");
+  });
+
+  it("collects metrics for an active session", async () => {
+    const scanner = createScanner(detected(15056));
+    const metrics: SystemMetrics = {
+      capturedAt: "2026-10-21T10:01:00.000Z",
+      cpuUsagePercent: 25,
+      memoryUsagePercent: 50,
+    };
+    const onMetrics = vi.fn();
+    const monitor = new SessionMonitor({
+      definitions: [game],
+      scanner,
+      metricsCollector: {
+        collect: vi.fn(async () => metrics),
+      },
+      onMetrics,
+    });
+
+    await monitor.pollOnce();
+    await vi.waitFor(() => {
+      expect(onMetrics).toHaveBeenCalledWith(
+        expect.objectContaining({ pid: 15056 }),
+        metrics,
+      );
+    });
   });
 
   it("stops a session when its process disappears", async () => {
