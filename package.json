@@ -1,0 +1,28 @@
+{
+  "name": "gamesense-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/desktop",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @gamesense/desktop",
+    "build": "npm run build --workspace @gamesense/desktop",
+    "build:contracts": "npm run build --workspace @gamesense/contracts",
+    "build:game-core": "npm run build --workspace @gamesense/game-core",
+    "build:core": "npm run build:contracts && npm run build:game-core",
+    "build:database": "npm run build --workspace @gamesense/database",
+    "build:collector": "npm run build --workspace @gamesense/collector",
+    "typecheck:database": "npm run typecheck --workspace @gamesense/database",
+    "typecheck:collector": "npm run typecheck --workspace @gamesense/collector",
+    "test:core": "vitest run packages/game-core/tests",
+    "test:collector": "vitest run packages/collector/tests",
+    "typecheck:core": "npm run typecheck --workspace @gamesense/contracts && npm run typecheck --workspace @gamesense/game-core"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
+  }
+}
