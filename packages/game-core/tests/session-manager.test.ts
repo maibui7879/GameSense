@@ -23,6 +23,7 @@ describe("SessionManager", () => {
 
     expect(session.gameId).toBe("stella-sora");
     expect(session.pid).toBe(1234);
+    expect(session.processStartedAt).toBe("2026-10-21T10:00:00.000Z");
     expect(session.status).toBe("running");
     expect(session.endedAt).toBeNull();
     expect(session.id).toBeTruthy();

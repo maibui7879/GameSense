@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import type {
   GameDefinition,
   GameProcessInfo,
+  GameSession,
 } from "@gamesense/contracts";
 
 const execFileAsync = promisify(execFile);
@@ -146,6 +147,25 @@ export function matchRunningGames(
       ? [{ gameId, process: processInfo }]
       : [];
   });
+}
+
+export function matchesProcessIdentity(
+  session: Pick<GameSession, "pid" | "processStartedAt">,
+  processInfo: GameProcessInfo,
+): boolean {
+  if (session.pid !== processInfo.pid) {
+    return false;
+  }
+
+  if (
+    session.processStartedAt === null ||
+    session.processStartedAt === UNKNOWN_STARTED_AT ||
+    processInfo.startedAt === UNKNOWN_STARTED_AT
+  ) {
+    return true;
+  }
+
+  return session.processStartedAt === processInfo.startedAt;
 }
 
 function isRawProcess(value: unknown): value is RawProcess {

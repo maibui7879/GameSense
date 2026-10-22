@@ -6,6 +6,7 @@ import type {
 import { SessionManager } from "@gamesense/game-core";
 import {
   WindowsProcessScanner,
+  matchesProcessIdentity,
   type DetectedGameProcess,
 } from "./process-scanner.js";
 
@@ -154,7 +155,7 @@ export class SessionMonitor {
       ? detected.find(
           (item) =>
             item.gameId === current.gameId &&
-            item.process.pid === current.pid,
+            matchesProcessIdentity(current, item.process),
         )
       : undefined;
 
@@ -205,9 +206,12 @@ export class SessionMonitor {
     const task = this.metricsCollector
       .collect()
       .then((metrics) => {
+        const current = this.sessionManager.getCurrentSession();
+
         if (
           generation === this.generation &&
-          this.sessionManager.getCurrentSession()?.id === session.id
+          current?.id === session.id &&
+          current.status === "running"
         ) {
           this.onMetrics?.(session, metrics);
         }

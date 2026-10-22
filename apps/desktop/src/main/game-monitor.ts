@@ -1,7 +1,7 @@
 import {
   SessionMonitor,
   STELLA_SORA,
-  WindowsSystemMetricsCollector
+  WindowsSystemMetricsCollector,
 } from '@gamesense/collector'
 import type { GameSession } from '@gamesense/contracts'
 import { GameSenseDatabase } from '@gamesense/database'
@@ -28,14 +28,12 @@ function emit(event: GameMonitorEvent): void {
     try {
       listener(event)
     } catch (error) {
-      // Một listener lỗi không được ngăn các listener khác nhận sự kiện.
       console.error('[GameSense] Monitor listener failed:', error)
     }
   }
 }
 
 export function startGameMonitor(persistence: GameSenseDatabase): void {
-  // Tránh tạo nhiều monitor khi cửa sổ được mở lại.
   if (monitor !== null) return
 
   database = persistence
@@ -51,29 +49,35 @@ export function startGameMonitor(persistence: GameSenseDatabase): void {
     onSessionChange(session) {
       if (session === null) return
 
+      let persistenceFailed = false
+
       try {
         database?.saveSession(session)
       } catch (error) {
+        persistenceFailed = true
         console.error('[GameSense] Persistence failed:', error)
-        emit({
-          type: 'error',
-          message: 'KhÃ´ng thá»ƒ lÆ°u tráº¡ng thÃ¡i phiÃªn game.'
-        })
       }
 
       emit({
         type: 'session-change',
-        session
+        session,
       })
+
+      if (persistenceFailed) {
+        emit({
+          type: 'error',
+          message:
+            'Kh\u00f4ng th\u1ec3 l\u01b0u tr\u1ea1ng th\u00e1i phi\u00ean game.',
+        })
+      }
     },
 
     onError(error) {
-      // Chi tiết lỗi chỉ được ghi ở Main Process.
       console.error('[GameSense] Monitor operation failed:', error)
 
       emit({
         type: 'error',
-        message: 'Không thể kiểm tra tiến trình game.'
+        message: 'Kh\u00f4ng th\u1ec3 ki\u1ec3m tra ti\u1ebfn tr\u00ecnh game.',
       })
     },
 
@@ -84,10 +88,11 @@ export function startGameMonitor(persistence: GameSenseDatabase): void {
         console.error('[GameSense] Metric persistence failed:', error)
         emit({
           type: 'error',
-          message: 'KhÃ´ng thá»ƒ lÆ°u chá»‰ sá»‘ hiá»‡u nÄƒng.'
+          message:
+            'Kh\u00f4ng th\u1ec3 l\u01b0u ch\u1ec9 s\u1ed1 hi\u1ec7u n\u0103ng.',
         })
       }
-    }
+    },
   })
 
   monitor.start()
@@ -98,7 +103,7 @@ export function getCurrentGameSession(): GameSession | null {
 }
 
 export function subscribeToGameMonitor(
-  listener: MonitorListener
+  listener: MonitorListener,
 ): () => void {
   listeners.add(listener)
 

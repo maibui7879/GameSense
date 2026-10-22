@@ -5,6 +5,7 @@ import type {
 } from "@gamesense/contracts";
 import {
   matchRunningGames,
+  matchesProcessIdentity,
   resolveStartedAt,
   UNKNOWN_STARTED_AT,
 } from "../src/process-scanner.js";
@@ -96,6 +97,39 @@ describe("matchRunningGames", () => {
     matchRunningGames(processes, definitions);
 
     expect(processes).toEqual(original);
+  });
+});
+
+describe("matchesProcessIdentity", () => {
+  it("requires the process start time when it is known", () => {
+    expect(matchesProcessIdentity(
+      { pid: 100, processStartedAt: "2026-10-21T10:00:00.000Z" },
+      createProcess(100, "StellaSora.exe"),
+    )).toBe(true);
+
+    expect(matchesProcessIdentity(
+      { pid: 100, processStartedAt: "2026-10-21T11:00:00.000Z" },
+      createProcess(100, "StellaSora.exe"),
+    )).toBe(false);
+  });
+
+  it("falls back to PID when either process start time is unavailable", () => {
+    expect(matchesProcessIdentity(
+      { pid: 100, processStartedAt: UNKNOWN_STARTED_AT },
+      createProcess(100, "StellaSora.exe"),
+    )).toBe(true);
+
+    expect(matchesProcessIdentity(
+      { pid: 100, processStartedAt: "2026-10-21T10:00:00.000Z" },
+      createProcess(100, "StellaSora.exe"),
+    )).toBe(true);
+  });
+
+  it("rejects a different PID even when timestamps match", () => {
+    expect(matchesProcessIdentity(
+      { pid: 100, processStartedAt: "2026-10-21T10:00:00.000Z" },
+      createProcess(101, "StellaSora.exe"),
+    )).toBe(false);
   });
 });
 

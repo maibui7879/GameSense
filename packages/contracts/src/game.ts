@@ -22,6 +22,7 @@ export interface GameSession {
   id: string;
   gameId: GameId;
   pid: number;
+  processStartedAt: string | null;
   startedAt: string;
   endedAt: string | null;
   status: "running" | "stopped";

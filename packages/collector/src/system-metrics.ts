@@ -19,7 +19,7 @@ export class WindowsSystemMetricsCollector implements MetricsCollector {
     }
 
     const script = `
-      $cpu = (Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 0.2 -MaxSamples 1).CounterSamples[0].CookedValue
+      $cpu = (Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 1).CounterSamples[0].CookedValue
       $os = Get-CimInstance Win32_OperatingSystem
       $memory = (1 - ($os.FreePhysicalMemory / $os.TotalVisibleMemorySize)) * 100
       [PSCustomObject]@{

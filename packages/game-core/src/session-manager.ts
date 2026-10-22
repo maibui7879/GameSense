@@ -42,6 +42,7 @@ export class SessionManager {
       id: crypto.randomUUID(),
       gameId,
       pid: processInfo.pid,
+      processStartedAt: processInfo.startedAt,
       startedAt: new Date().toISOString(),
       endedAt: null,
       status: "running",

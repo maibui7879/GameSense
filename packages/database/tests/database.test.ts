@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import BetterSqlite3 from "better-sqlite3";
 import type { GameSession, SystemMetrics } from "@gamesense/contracts";
 import { GameSenseDatabase } from "../src/index.js";
 
@@ -34,6 +35,7 @@ function session(overrides: Partial<GameSession> = {}): GameSession {
     id: "session-1",
     gameId: "stella-sora",
     pid: 1234,
+    processStartedAt: "2026-10-22T09:59:00.000Z",
     startedAt: "2026-10-22T10:00:00.000Z",
     endedAt: null,
     status: "running",
@@ -87,6 +89,44 @@ describe("GameSenseDatabase", () => {
 
     expect(reopened.getSession(saved.id)).toEqual(saved);
     expect(reopened.getCurrentSession()).toEqual(saved);
+  });
+
+  it("migrates a schema v1 database without losing sessions", () => {
+    const directory = mkdtempSync(join(tmpdir(), "gamesense-db-"));
+    temporaryDirectories.push(directory);
+    const filename = join(directory, "gamesense.db");
+    const legacy = new BetterSqlite3(filename);
+
+    legacy.exec(`
+      CREATE TABLE game_sessions (
+        id TEXT PRIMARY KEY NOT NULL,
+        game_id TEXT NOT NULL,
+        pid INTEGER NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        status TEXT NOT NULL
+      );
+      INSERT INTO game_sessions
+        (id, game_id, pid, started_at, ended_at, status)
+      VALUES
+        ('legacy-session', 'stella-sora', 1234,
+         '2026-10-22T10:00:00.000Z', NULL, 'running');
+      PRAGMA user_version = 1;
+    `);
+    legacy.close();
+
+    const migrated = new GameSenseDatabase(filename);
+    databases.push(migrated);
+
+    expect(migrated.getSession("legacy-session")).toEqual({
+      id: "legacy-session",
+      gameId: "stella-sora",
+      pid: 1234,
+      processStartedAt: null,
+      startedAt: "2026-10-22T10:00:00.000Z",
+      endedAt: null,
+      status: "running",
+    });
   });
 
   it("lists sessions newest first", () => {

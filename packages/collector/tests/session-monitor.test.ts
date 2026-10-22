@@ -93,6 +93,7 @@ describe("SessionMonitor", () => {
       id: "persisted-session",
       gameId: "stella-sora",
       pid: 15056,
+      processStartedAt: "2026-10-21T10:00:00.000Z",
       startedAt: "2026-10-21T10:00:00.000Z",
       endedAt: null,
       status: "running",
@@ -114,6 +115,7 @@ describe("SessionMonitor", () => {
       id: "persisted-session",
       gameId: "stella-sora",
       pid: 15056,
+      processStartedAt: "2026-10-21T10:00:00.000Z",
       startedAt: "2026-10-21T10:00:00.000Z",
       endedAt: null,
       status: "running",
@@ -127,6 +129,39 @@ describe("SessionMonitor", () => {
     await monitor.pollOnce();
 
     expect(monitor.getCurrentSession()?.status).toBe("stopped");
+  });
+
+  it("starts a new session when a PID is reused by a different process", async () => {
+    const scanner = createScanner([{
+      gameId: "stella-sora",
+      process: {
+        ...processInfo(15056),
+        startedAt: "2026-10-21T11:00:00.000Z",
+      },
+    }]);
+    const restored: GameSession = {
+      id: "persisted-session",
+      gameId: "stella-sora",
+      pid: 15056,
+      processStartedAt: "2026-10-21T10:00:00.000Z",
+      startedAt: "2026-10-21T10:00:00.000Z",
+      endedAt: null,
+      status: "running",
+    };
+    const monitor = new SessionMonitor({
+      definitions: [game],
+      scanner,
+      initialSession: restored,
+    });
+
+    await monitor.pollOnce();
+
+    expect(monitor.getCurrentSession()).toMatchObject({
+      status: "running",
+      pid: 15056,
+      processStartedAt: "2026-10-21T11:00:00.000Z",
+    });
+    expect(monitor.getCurrentSession()?.id).not.toBe(restored.id);
   });
 
   it("collects metrics for an active session", async () => {
@@ -152,6 +187,35 @@ describe("SessionMonitor", () => {
         expect.objectContaining({ pid: 15056 }),
         metrics,
       );
+    });
+  });
+
+  it("does not persist metrics that finish after the session stops", async () => {
+    const scanner = createScanner(detected(15056));
+    let resolveMetrics!: (value: SystemMetrics) => void;
+    const onMetrics = vi.fn();
+    const monitor = new SessionMonitor({
+      definitions: [game],
+      scanner,
+      metricsCollector: {
+        collect: () => new Promise((resolve) => {
+          resolveMetrics = resolve;
+        }),
+      },
+      onMetrics,
+    });
+
+    await monitor.pollOnce();
+    scanner.results = [];
+    await monitor.pollOnce();
+    resolveMetrics({
+      capturedAt: "2026-10-21T10:01:00.000Z",
+      cpuUsagePercent: 25,
+      memoryUsagePercent: 50,
+    });
+
+    await vi.waitFor(() => {
+      expect(onMetrics).not.toHaveBeenCalled();
     });
   });
 

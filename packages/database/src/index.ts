@@ -6,12 +6,13 @@ import type {
 
 export const DATABASE_PACKAGE_VERSION = "0.1.0";
 
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 interface SessionRow {
   id: string;
   game_id: string;
   pid: number;
+  process_started_at: string | null;
   started_at: string;
   ended_at: string | null;
   status: GameSession["status"];
@@ -44,11 +45,12 @@ export class GameSenseDatabase {
       .prepare(
         `
           INSERT INTO game_sessions
-            (id, game_id, pid, started_at, ended_at, status)
-          VALUES (@id, @gameId, @pid, @startedAt, @endedAt, @status)
+            (id, game_id, pid, process_started_at, started_at, ended_at, status)
+          VALUES (@id, @gameId, @pid, @processStartedAt, @startedAt, @endedAt, @status)
           ON CONFLICT(id) DO UPDATE SET
             game_id = excluded.game_id,
             pid = excluded.pid,
+            process_started_at = excluded.process_started_at,
             started_at = excluded.started_at,
             ended_at = excluded.ended_at,
             status = excluded.status
@@ -58,6 +60,7 @@ export class GameSenseDatabase {
         id: session.id,
         gameId: session.gameId,
         pid: session.pid,
+        processStartedAt: session.processStartedAt,
         startedAt: session.startedAt,
         endedAt: session.endedAt,
         status: session.status,
@@ -67,7 +70,7 @@ export class GameSenseDatabase {
   getSession(id: string): GameSession | null {
     const row = this.database
       .prepare<[{ id: string }], SessionRow>(
-        `SELECT id, game_id, pid, started_at, ended_at, status
+        `SELECT id, game_id, pid, process_started_at, started_at, ended_at, status
          FROM game_sessions WHERE id = @id`,
       )
       .get({ id });
@@ -78,7 +81,7 @@ export class GameSenseDatabase {
   getCurrentSession(): GameSession | null {
     const row = this.database
       .prepare<[], SessionRow>(
-        `SELECT id, game_id, pid, started_at, ended_at, status
+        `SELECT id, game_id, pid, process_started_at, started_at, ended_at, status
          FROM game_sessions
          WHERE status = 'running'
          ORDER BY started_at DESC
@@ -94,7 +97,7 @@ export class GameSenseDatabase {
     const offset = normalizeOffset(options.offset);
     const rows = this.database
       .prepare<[{ limit: number; offset: number }], SessionRow>(
-        `SELECT id, game_id, pid, started_at, ended_at, status
+        `SELECT id, game_id, pid, process_started_at, started_at, ended_at, status
          FROM game_sessions
          ORDER BY started_at DESC
          LIMIT @limit OFFSET @offset`,
@@ -161,6 +164,7 @@ export class GameSenseDatabase {
             id TEXT PRIMARY KEY NOT NULL,
             game_id TEXT NOT NULL,
             pid INTEGER NOT NULL CHECK (pid > 0),
+            process_started_at TEXT,
             started_at TEXT NOT NULL,
             ended_at TEXT,
             status TEXT NOT NULL CHECK (status IN ('running', 'stopped')),
@@ -197,6 +201,18 @@ export class GameSenseDatabase {
       });
 
       migration();
+      return;
+    }
+
+    if (version === 1) {
+      const migration = this.database.transaction(() => {
+        this.database.exec(
+          "ALTER TABLE game_sessions ADD COLUMN process_started_at TEXT",
+        );
+        this.database.pragma(`user_version = ${CURRENT_SCHEMA_VERSION}`);
+      });
+
+      migration();
     }
   }
 }
@@ -206,6 +222,7 @@ function mapSessionRow(row: SessionRow): GameSession {
     id: row.id,
     gameId: row.game_id,
     pid: row.pid,
+    processStartedAt: row.process_started_at,
     startedAt: row.started_at,
     endedAt: row.ended_at,
     status: row.status,
