@@ -8,6 +8,7 @@ import {
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { GameSenseDatabase } from '@gamesense/database'
 
 import {
   getCurrentGameSession,
@@ -116,7 +117,11 @@ app.whenReady().then(() => {
     }
   })
 
-  startGameMonitor()
+  const database = new GameSenseDatabase(
+    join(app.getPath('userData'), 'gamesense.db'),
+  )
+
+  startGameMonitor(database)
 
   createWindow()
 

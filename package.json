@@ -18,6 +18,7 @@
     "typecheck:collector": "npm run typecheck --workspace @gamesense/collector",
     "test:core": "vitest run packages/game-core/tests",
     "test:collector": "vitest run packages/collector/tests",
+    "test:database": "vitest run packages/database/tests",
     "typecheck:core": "npm run typecheck --workspace @gamesense/contracts && npm run typecheck --workspace @gamesense/game-core"
   },
   "devDependencies": {

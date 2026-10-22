@@ -3,6 +3,7 @@ import {
   STELLA_SORA
 } from '@gamesense/collector'
 import type { GameSession } from '@gamesense/contracts'
+import { GameSenseDatabase } from '@gamesense/database'
 
 export type GameMonitorEvent =
   | {
@@ -17,6 +18,7 @@ export type GameMonitorEvent =
 type MonitorListener = (event: GameMonitorEvent) => void
 
 let monitor: SessionMonitor | null = null
+let database: GameSenseDatabase | null = null
 
 const listeners = new Set<MonitorListener>()
 
@@ -31,9 +33,11 @@ function emit(event: GameMonitorEvent): void {
   }
 }
 
-export function startGameMonitor(): void {
+export function startGameMonitor(persistence: GameSenseDatabase): void {
   // Tránh tạo nhiều monitor khi cửa sổ được mở lại.
   if (monitor !== null) return
+
+  database = persistence
 
   monitor = new SessionMonitor({
     definitions: [STELLA_SORA],
@@ -41,6 +45,8 @@ export function startGameMonitor(): void {
 
     onSessionChange(session) {
       if (session === null) return
+
+      database?.saveSession(session)
 
       emit({
         type: 'session-change',
@@ -79,4 +85,6 @@ export function subscribeToGameMonitor(
 export function stopGameMonitor(): void {
   monitor?.stop()
   monitor = null
+  database?.close()
+  database = null
 }

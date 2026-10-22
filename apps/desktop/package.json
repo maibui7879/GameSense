@@ -21,6 +21,9 @@
     "build:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
+    "@gamesense/collector": "^0.1.0",
+    "@gamesense/contracts": "^0.1.0",
+    "@gamesense/database": "^0.1.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0"
   },
