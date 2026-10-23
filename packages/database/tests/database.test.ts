@@ -37,6 +37,7 @@ function session(overrides: Partial<GameSession> = {}): GameSession {
     pid: 1234,
     processStartedAt: "2026-10-22T09:59:00.000Z",
     startedAt: "2026-10-22T10:00:00.000Z",
+    lastSeenAt: "2026-10-22T10:00:00.000Z",
     endedAt: null,
     status: "running",
     ...overrides,
@@ -124,6 +125,7 @@ describe("GameSenseDatabase", () => {
       pid: 1234,
       processStartedAt: null,
       startedAt: "2026-10-22T10:00:00.000Z",
+      lastSeenAt: "2026-10-22T10:00:00.000Z",
       endedAt: null,
       status: "running",
     });

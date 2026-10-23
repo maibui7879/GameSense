@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { freemem, totalmem } from "node:os";
 import { promisify } from "node:util";
 import type { SystemMetrics } from "@gamesense/contracts";
 import type { MetricsCollector } from "./session-monitor.js";
@@ -20,10 +21,8 @@ export class WindowsSystemMetricsCollector implements MetricsCollector {
 
     const script = `
       $cpu = (Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 1).CounterSamples[0].CookedValue
-      $memory = (Get-Counter '\\Memory\\% Committed Bytes In Use' -SampleInterval 1 -MaxSamples 1).CounterSamples[0].CookedValue
       [PSCustomObject]@{
         cpuUsagePercent = $cpu
-        memoryUsagePercent = $memory
       } | ConvertTo-Json -Compress
     `;
 
@@ -43,8 +42,22 @@ export class WindowsSystemMetricsCollector implements MetricsCollector {
       },
     );
 
-    return parseSystemMetrics(JSON.parse(stdout.trim()));
+    return parseSystemMetrics({
+      ...JSON.parse(stdout.trim()),
+      memoryUsagePercent: getPhysicalMemoryUsagePercent(),
+    });
   }
+}
+
+export function getPhysicalMemoryUsagePercent(): number | null {
+  const total = totalmem();
+  const free = freemem();
+
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(free)) {
+    return null;
+  }
+
+  return Math.min(100, Math.max(0, ((total - free) / total) * 100));
 }
 
 export function parseSystemMetrics(

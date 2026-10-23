@@ -6,7 +6,7 @@ import type {
 
 export const DATABASE_PACKAGE_VERSION = "0.1.0";
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 interface SessionRow {
   id: string;
@@ -14,6 +14,7 @@ interface SessionRow {
   pid: number;
   process_started_at: string | null;
   started_at: string;
+  last_seen_at: string;
   ended_at: string | null;
   status: GameSession["status"];
 }
@@ -45,13 +46,14 @@ export class GameSenseDatabase {
       .prepare(
         `
           INSERT INTO game_sessions
-            (id, game_id, pid, process_started_at, started_at, ended_at, status)
-          VALUES (@id, @gameId, @pid, @processStartedAt, @startedAt, @endedAt, @status)
+            (id, game_id, pid, process_started_at, started_at, last_seen_at, ended_at, status)
+          VALUES (@id, @gameId, @pid, @processStartedAt, @startedAt, @lastSeenAt, @endedAt, @status)
           ON CONFLICT(id) DO UPDATE SET
             game_id = excluded.game_id,
             pid = excluded.pid,
             process_started_at = excluded.process_started_at,
             started_at = excluded.started_at,
+            last_seen_at = excluded.last_seen_at,
             ended_at = excluded.ended_at,
             status = excluded.status
         `,
@@ -62,6 +64,7 @@ export class GameSenseDatabase {
         pid: session.pid,
         processStartedAt: session.processStartedAt,
         startedAt: session.startedAt,
+        lastSeenAt: session.lastSeenAt,
         endedAt: session.endedAt,
         status: session.status,
       });
@@ -70,7 +73,7 @@ export class GameSenseDatabase {
   getSession(id: string): GameSession | null {
     const row = this.database
       .prepare<[{ id: string }], SessionRow>(
-        `SELECT id, game_id, pid, process_started_at, started_at, ended_at, status
+        `SELECT id, game_id, pid, process_started_at, started_at, last_seen_at, ended_at, status
          FROM game_sessions WHERE id = @id`,
       )
       .get({ id });
@@ -81,7 +84,7 @@ export class GameSenseDatabase {
   getCurrentSession(): GameSession | null {
     const row = this.database
       .prepare<[], SessionRow>(
-        `SELECT id, game_id, pid, process_started_at, started_at, ended_at, status
+        `SELECT id, game_id, pid, process_started_at, started_at, last_seen_at, ended_at, status
          FROM game_sessions
          WHERE status = 'running'
          ORDER BY started_at DESC
@@ -97,7 +100,7 @@ export class GameSenseDatabase {
     const offset = normalizeOffset(options.offset);
     const rows = this.database
       .prepare<[{ limit: number; offset: number }], SessionRow>(
-        `SELECT id, game_id, pid, process_started_at, started_at, ended_at, status
+        `SELECT id, game_id, pid, process_started_at, started_at, last_seen_at, ended_at, status
          FROM game_sessions
          ORDER BY started_at DESC
          LIMIT @limit OFFSET @offset`,
@@ -105,6 +108,16 @@ export class GameSenseDatabase {
       .all({ limit, offset });
 
     return rows.map(mapSessionRow);
+  }
+
+  countSessions(): number {
+    const row = this.database
+      .prepare<[], { count: number }>(
+        "SELECT COUNT(*) AS count FROM game_sessions",
+      )
+      .get();
+
+    return row?.count ?? 0;
   }
 
   insertMetrics(
@@ -166,6 +179,7 @@ export class GameSenseDatabase {
             pid INTEGER NOT NULL CHECK (pid > 0),
             process_started_at TEXT,
             started_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
             ended_at TEXT,
             status TEXT NOT NULL CHECK (status IN ('running', 'stopped')),
             CHECK (
@@ -209,6 +223,26 @@ export class GameSenseDatabase {
         this.database.exec(
           "ALTER TABLE game_sessions ADD COLUMN process_started_at TEXT",
         );
+        this.database.exec(
+          "ALTER TABLE game_sessions ADD COLUMN last_seen_at TEXT",
+        );
+        this.database.exec(
+          "UPDATE game_sessions SET last_seen_at = started_at WHERE last_seen_at IS NULL",
+        );
+        this.database.pragma(`user_version = ${CURRENT_SCHEMA_VERSION}`);
+      });
+
+      migration();
+    }
+
+    if (version === 2) {
+      const migration = this.database.transaction(() => {
+        this.database.exec(
+          "ALTER TABLE game_sessions ADD COLUMN last_seen_at TEXT",
+        );
+        this.database.exec(
+          "UPDATE game_sessions SET last_seen_at = started_at WHERE last_seen_at IS NULL",
+        );
         this.database.pragma(`user_version = ${CURRENT_SCHEMA_VERSION}`);
       });
 
@@ -224,6 +258,7 @@ function mapSessionRow(row: SessionRow): GameSession {
     pid: row.pid,
     processStartedAt: row.process_started_at,
     startedAt: row.started_at,
+    lastSeenAt: row.last_seen_at,
     endedAt: row.ended_at,
     status: row.status,
   };

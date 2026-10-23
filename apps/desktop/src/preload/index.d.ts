@@ -12,6 +12,8 @@ export interface GameSenseAPI {
 
   getSessionHistory: () => Promise<GameSession[]>
 
+  getSessionCount: () => Promise<number>
+
   onSessionChange: (
     callback: (session: GameSession) => void
   ) => () => void

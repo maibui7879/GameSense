@@ -28,6 +28,7 @@ export interface SessionMonitorOptions {
   metricsCollector?: MetricsCollector;
   intervalMs?: number;
   onSessionChange?: (session: GameSession | null) => void;
+  onSessionHeartbeat?: (session: GameSession) => void;
   onMetrics?: (session: GameSession, metrics: SystemMetrics) => void;
   onError?: (error: unknown) => void;
 }
@@ -45,12 +46,14 @@ export class SessionMonitor {
     session: GameSession,
     metrics: SystemMetrics,
   ) => void;
+  private readonly onSessionHeartbeat?: (session: GameSession) => void;
   private readonly onError?: (error: unknown) => void;
 
   private timer: ReturnType<typeof setInterval> | null = null;
   private inFlight: Promise<void> | null = null;
   private metricsInFlight: Promise<void> | null = null;
   private generation = 0;
+  private recoverySessionId: string | null = null;
 
   constructor(options: SessionMonitorOptions) {
     this.definitions = options.definitions;
@@ -59,11 +62,13 @@ export class SessionMonitor {
       options.sessionManager ?? new SessionManager();
     if (options.initialSession) {
       this.sessionManager.restoreSession(options.initialSession);
+      this.recoverySessionId = options.initialSession.id;
     }
     this.metricsCollector = options.metricsCollector;
     this.intervalMs = options.intervalMs ?? 2000;
     this.onSessionChange = options.onSessionChange;
     this.onMetrics = options.onMetrics;
+    this.onSessionHeartbeat = options.onSessionHeartbeat;
     this.onError = options.onError;
 
     if (this.intervalMs <= 0) {
@@ -160,6 +165,10 @@ export class SessionMonitor {
       : undefined;
 
     if (current && currentProcess) {
+      this.recoverySessionId = null;
+      this.onSessionHeartbeat?.(
+        this.sessionManager.touchSession() ?? current,
+      );
       this.captureMetrics(current, generation);
       // Game vẫn chạy; giữ nguyên session hiện tại.
       return;
@@ -168,7 +177,12 @@ export class SessionMonitor {
     if (current) {
       const stopped = this.sessionManager.stopSession(
         current.pid,
+        this.recoverySessionId === current.id
+          ? current.lastSeenAt
+          : undefined,
       );
+
+      this.recoverySessionId = null;
 
       if (stopped) {
         this.onSessionChange?.(stopped);

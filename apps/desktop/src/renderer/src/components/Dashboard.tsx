@@ -41,14 +41,36 @@ export function Dashboard(): React.JSX.Element {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
   const [session, setSession] = useState<GameSession | null>(null)
   const [sessions, setSessions] = useState<GameSession[]>([])
+  const [sessionCount, setSessionCount] = useState<number | null>(null)
   const [sessionsLoading, setSessionsLoading] = useState(true)
   const [activeView, setActiveView] = useState<DashboardView>('overview')
   const [error, setError] = useState<string | null>(null)
   const [monitorError, setMonitorError] = useState<string | null>(null)
+  const [sessionsError, setSessionsError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
   // Tránh kết quả truy vấn ban đầu ghi đè sự kiện mới hơn từ Main Process.
   const receivedSessionEvent = useRef(false)
+
+  const refreshSessions = (isMounted: () => boolean = () => true): void => {
+    setSessionsLoading(true)
+    Promise.all([
+      window.gamesense.getSessionHistory(),
+      window.gamesense.getSessionCount(),
+    ])
+      .then(([history, count]) => {
+        if (!isMounted()) return
+        setSessions(history)
+        setSessionCount(count)
+        setSessionsError(null)
+      })
+      .catch(() => {
+        if (isMounted()) setSessionsError('Không thể tải lịch sử phiên game.')
+      })
+      .finally(() => {
+        if (isMounted()) setSessionsLoading(false)
+      })
+  }
 
   useEffect(() => {
     let mounted = true
@@ -61,14 +83,7 @@ export function Dashboard(): React.JSX.Element {
         setMonitorError(null)
       }
 
-      window.gamesense
-        .getSessionHistory()
-        .then((history) => {
-          if (mounted) setSessions(history)
-        })
-        .catch(() => {
-          if (mounted) setMonitorError('Không thể tải lịch sử phiên game.')
-        })
+      refreshSessions(() => mounted)
     })
 
     const unsubscribeError = window.gamesense.onError((message) => {
@@ -101,19 +116,7 @@ export function Dashboard(): React.JSX.Element {
         }
       })
 
-    window.gamesense
-      .getSessionHistory()
-      .then((history) => {
-        if (mounted) setSessions(history)
-      })
-      .catch(() => {
-        if (mounted) {
-          setMonitorError('Không thể tải lịch sử phiên game.')
-        }
-      })
-      .finally(() => {
-        if (mounted) setSessionsLoading(false)
-      })
+    refreshSessions(() => mounted)
 
     const clock = window.setInterval(() => {
       setNow(Date.now())
@@ -224,13 +227,8 @@ export function Dashboard(): React.JSX.Element {
             <SessionsPanel
               sessions={sessions}
               loading={sessionsLoading}
-              onRefresh={() => {
-                setSessionsLoading(true)
-                window.gamesense
-                  .getSessionHistory()
-                  .then(setSessions)
-                  .finally(() => setSessionsLoading(false))
-              }}
+              error={sessionsError}
+              onRefresh={refreshSessions}
             />
           ) : (
             <>
@@ -282,9 +280,11 @@ export function Dashboard(): React.JSX.Element {
               <p className="text-xs uppercase tracking-wider text-slate-500">
                 Sessions
               </p>
-              <p className="mt-2 text-3xl font-semibold text-slate-100">{sessions.length}</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-100">
+                {sessionCount === null ? '—' : sessionCount}
+              </p>
               <p className="mt-2 text-xs text-slate-500">
-                Saved game sessions
+                Total saved game sessions
               </p>
             </div>
 
@@ -378,12 +378,14 @@ export function Dashboard(): React.JSX.Element {
 interface SessionsPanelProps {
   sessions: GameSession[]
   loading: boolean
+  error: string | null
   onRefresh: () => void
 }
 
 function SessionsPanel({
   sessions,
   loading,
+  error,
   onRefresh,
 }: SessionsPanelProps): React.JSX.Element {
   const now = Date.now()
@@ -413,6 +415,8 @@ function SessionsPanel({
       <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
         {loading ? (
           <p className="p-6 text-sm text-slate-500">Đang tải lịch sử phiên...</p>
+        ) : error ? (
+          <p className="p-6 text-sm text-red-400">{error}</p>
         ) : sessions.length === 0 ? (
           <p className="p-6 text-sm text-slate-500">Chưa có phiên game nào.</p>
         ) : (

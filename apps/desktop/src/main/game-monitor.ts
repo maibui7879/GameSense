@@ -72,6 +72,18 @@ export function startGameMonitor(persistence: GameSenseDatabase): void {
       }
     },
 
+    onSessionHeartbeat(session) {
+      try {
+        database?.saveSession(session)
+      } catch (error) {
+        console.error('[GameSense] Session heartbeat persistence failed:', error)
+        emit({
+          type: 'error',
+          message: 'Không thể lưu trạng thái phiên game.',
+        })
+      }
+    },
+
     onError(error) {
       console.error('[GameSense] Monitor operation failed:', error)
 
@@ -104,6 +116,10 @@ export function getCurrentGameSession(): GameSession | null {
 
 export function getGameSessionHistory(): GameSession[] {
   return database?.listSessions({ limit: 100 }) ?? []
+}
+
+export function getGameSessionCount(): number {
+  return database?.countSessions() ?? 0
 }
 
 export function subscribeToGameMonitor(

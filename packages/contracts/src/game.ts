@@ -24,6 +24,7 @@ export interface GameSession {
   pid: number;
   processStartedAt: string | null;
   startedAt: string;
+  lastSeenAt: string;
   endedAt: string | null;
   status: "running" | "stopped";
 }

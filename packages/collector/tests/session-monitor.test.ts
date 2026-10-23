@@ -95,6 +95,7 @@ describe("SessionMonitor", () => {
       pid: 15056,
       processStartedAt: "2026-10-21T10:00:00.000Z",
       startedAt: "2026-10-21T10:00:00.000Z",
+      lastSeenAt: "2026-10-21T10:00:00.000Z",
       endedAt: null,
       status: "running",
     };
@@ -117,6 +118,7 @@ describe("SessionMonitor", () => {
       pid: 15056,
       processStartedAt: "2026-10-21T10:00:00.000Z",
       startedAt: "2026-10-21T10:00:00.000Z",
+      lastSeenAt: "2026-10-21T10:00:00.000Z",
       endedAt: null,
       status: "running",
     };
@@ -128,7 +130,36 @@ describe("SessionMonitor", () => {
 
     await monitor.pollOnce();
 
-    expect(monitor.getCurrentSession()?.status).toBe("stopped");
+    expect(monitor.getCurrentSession()).toMatchObject({
+      status: "stopped",
+      endedAt: "2026-10-21T10:00:00.000Z",
+    });
+  });
+
+  it("falls back to PID when the persisted process timestamp is unknown", async () => {
+    const scanner = createScanner([{
+      gameId: "stella-sora",
+      process: processInfo(15056),
+    }]);
+    const restored: GameSession = {
+      id: "persisted-session",
+      gameId: "stella-sora",
+      pid: 15056,
+      processStartedAt: null,
+      startedAt: "2026-10-21T10:00:00.000Z",
+      lastSeenAt: "2026-10-21T10:00:00.000Z",
+      endedAt: null,
+      status: "running",
+    };
+    const monitor = new SessionMonitor({
+      definitions: [game],
+      scanner,
+      initialSession: restored,
+    });
+
+    await monitor.pollOnce();
+
+    expect(monitor.getCurrentSession()?.id).toBe(restored.id);
   });
 
   it("starts a new session when a PID is reused by a different process", async () => {
@@ -145,6 +176,7 @@ describe("SessionMonitor", () => {
       pid: 15056,
       processStartedAt: "2026-10-21T10:00:00.000Z",
       startedAt: "2026-10-21T10:00:00.000Z",
+      lastSeenAt: "2026-10-21T10:00:00.000Z",
       endedAt: null,
       status: "running",
     };
@@ -193,14 +225,18 @@ describe("SessionMonitor", () => {
   it("does not persist metrics that finish after the session stops", async () => {
     const scanner = createScanner(detected(15056));
     let resolveMetrics!: (value: SystemMetrics) => void;
+    let resolveCollectionComplete!: () => void;
+    const collectionComplete = new Promise<void>((resolve) => {
+      resolveCollectionComplete = resolve;
+    });
     const onMetrics = vi.fn();
     const monitor = new SessionMonitor({
       definitions: [game],
       scanner,
       metricsCollector: {
-        collect: () => new Promise((resolve) => {
+        collect: () => new Promise<SystemMetrics>((resolve) => {
           resolveMetrics = resolve;
-        }),
+        }).finally(resolveCollectionComplete),
       },
       onMetrics,
     });
@@ -213,10 +249,9 @@ describe("SessionMonitor", () => {
       cpuUsagePercent: 25,
       memoryUsagePercent: 50,
     });
+    await collectionComplete;
 
-    await vi.waitFor(() => {
-      expect(onMetrics).not.toHaveBeenCalled();
-    });
+    expect(onMetrics).not.toHaveBeenCalled();
   });
 
   it("stops a session when its process disappears", async () => {

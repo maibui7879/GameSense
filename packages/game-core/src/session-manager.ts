@@ -38,12 +38,14 @@ export class SessionManager {
       );
     }
 
+    const now = new Date().toISOString();
     const session: GameSession = {
       id: crypto.randomUUID(),
       gameId,
       pid: processInfo.pid,
       processStartedAt: processInfo.startedAt,
-      startedAt: new Date().toISOString(),
+      startedAt: now,
+      lastSeenAt: now,
       endedAt: null,
       status: "running",
     };
@@ -53,7 +55,23 @@ export class SessionManager {
     return { ...session };
   }
 
-  stopSession(pid?: number): GameSession | null {
+  touchSession(at = new Date().toISOString()): GameSession | null {
+    if (!this.currentSession || this.currentSession.status !== "running") {
+      return null;
+    }
+
+    this.currentSession = {
+      ...this.currentSession,
+      lastSeenAt: at,
+    };
+
+    return { ...this.currentSession };
+  }
+
+  stopSession(
+    pid?: number,
+    endedAt = new Date().toISOString(),
+  ): GameSession | null {
     const session = this.currentSession;
 
     if (!session || session.status !== "running") {
@@ -66,7 +84,7 @@ export class SessionManager {
 
     const stoppedSession: GameSession = {
       ...session,
-      endedAt: new Date().toISOString(),
+      endedAt,
       status: "stopped",
     };
 
