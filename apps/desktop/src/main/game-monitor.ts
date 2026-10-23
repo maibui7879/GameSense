@@ -3,7 +3,10 @@ import {
   STELLA_SORA,
   WindowsSystemMetricsCollector,
 } from '@gamesense/collector'
-import type { GameSession } from '@gamesense/contracts'
+import type {
+  GameSession,
+  SessionPerformanceSummary,
+} from '@gamesense/contracts'
 import { GameSenseDatabase } from '@gamesense/database'
 
 export type GameMonitorEvent =
@@ -120,6 +123,17 @@ export function getGameSessionHistory(): GameSession[] {
 
 export function getGameSessionCount(): number {
   return database?.countSessions() ?? 0
+}
+
+export function getGameSessionPerformanceSummary(
+  sessionId: string,
+): SessionPerformanceSummary {
+  return database?.getSessionPerformanceSummary(sessionId) ?? {
+    sessionId,
+    cpuUsagePercent: { average: null, peak: null, sampleCount: 0 },
+    memoryUsagePercent: { average: null, peak: null, sampleCount: 0 },
+    totalSampleCount: 0,
+  }
 }
 
 export function subscribeToGameMonitor(

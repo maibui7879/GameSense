@@ -14,6 +14,7 @@ import {
   getCurrentGameSession,
   getGameSessionCount,
   getGameSessionHistory,
+  getGameSessionPerformanceSummary,
   startGameMonitor,
   stopGameMonitor,
   subscribeToGameMonitor
@@ -104,6 +105,16 @@ ipcMain.handle('game:count-sessions', (event) => {
   assertTrustedSender(event)
 
   return getGameSessionCount()
+})
+
+ipcMain.handle('game:get-session-summary', (event, sessionId: unknown) => {
+  assertTrustedSender(event)
+
+  if (typeof sessionId !== 'string' || sessionId.trim() === '') {
+    throw new Error('Invalid session id.')
+  }
+
+  return getGameSessionPerformanceSummary(sessionId)
 })
 
 app.whenReady().then(() => {

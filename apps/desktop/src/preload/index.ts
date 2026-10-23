@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { GameSession } from '@gamesense/contracts'
+import type {
+  GameSession,
+  SessionPerformanceSummary,
+} from '@gamesense/contracts'
 
 const api = {}
 
@@ -19,6 +22,11 @@ const gamesense = {
 
   getSessionCount: (): Promise<number> =>
     ipcRenderer.invoke('game:count-sessions'),
+
+  getSessionPerformanceSummary: (
+    sessionId: string
+  ): Promise<SessionPerformanceSummary> =>
+    ipcRenderer.invoke('game:get-session-summary', sessionId),
 
   onSessionChange: (
     callback: (session: GameSession) => void

@@ -34,3 +34,16 @@ export interface SystemMetrics {
   cpuUsagePercent: number | null;
   memoryUsagePercent: number | null;
 }
+
+export interface MetricSummary {
+  average: number | null;
+  peak: number | null;
+  sampleCount: number;
+}
+
+export interface SessionPerformanceSummary {
+  sessionId: string;
+  cpuUsagePercent: MetricSummary;
+  memoryUsagePercent: MetricSummary;
+  totalSampleCount: number;
+}

@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import type {
   GameSession,
+  SessionPerformanceSummary,
   SystemMetrics,
 } from "@gamesense/contracts";
 
@@ -155,6 +156,48 @@ export class GameSenseDatabase {
       .all({ sessionId, limit: normalizedLimit });
 
     return rows.map(mapMetricsRow);
+  }
+
+  getSessionPerformanceSummary(
+    sessionId: string,
+  ): SessionPerformanceSummary {
+    const row = this.database
+      .prepare<[{ sessionId: string }], {
+        total_sample_count: number;
+        cpu_sample_count: number;
+        cpu_average: number | null;
+        cpu_peak: number | null;
+        memory_sample_count: number;
+        memory_average: number | null;
+        memory_peak: number | null;
+      }>(
+        `SELECT
+           COUNT(*) AS total_sample_count,
+           COUNT(cpu_usage_percent) AS cpu_sample_count,
+           AVG(cpu_usage_percent) AS cpu_average,
+           MAX(cpu_usage_percent) AS cpu_peak,
+           COUNT(memory_usage_percent) AS memory_sample_count,
+           AVG(memory_usage_percent) AS memory_average,
+           MAX(memory_usage_percent) AS memory_peak
+         FROM system_metrics
+         WHERE session_id = @sessionId`,
+      )
+      .get({ sessionId });
+
+    return {
+      sessionId,
+      cpuUsagePercent: {
+        average: row?.cpu_average ?? null,
+        peak: row?.cpu_peak ?? null,
+        sampleCount: row?.cpu_sample_count ?? 0,
+      },
+      memoryUsagePercent: {
+        average: row?.memory_average ?? null,
+        peak: row?.memory_peak ?? null,
+        sampleCount: row?.memory_sample_count ?? 0,
+      },
+      totalSampleCount: row?.total_sample_count ?? 0,
+    };
   }
 
   close(): void {

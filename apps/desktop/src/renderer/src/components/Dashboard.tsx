@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GameSession } from '@gamesense/contracts'
+import type {
+  GameSession,
+  SessionPerformanceSummary,
+} from '@gamesense/contracts'
 
 interface AppInfo {
   name: string
@@ -43,6 +46,11 @@ export function Dashboard(): React.JSX.Element {
   const [sessions, setSessions] = useState<GameSession[]>([])
   const [sessionCount, setSessionCount] = useState<number | null>(null)
   const [sessionsLoading, setSessionsLoading] = useState(true)
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [sessionSummary, setSessionSummary] =
+    useState<SessionPerformanceSummary | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
   const [activeView, setActiveView] = useState<DashboardView>('overview')
   const [error, setError] = useState<string | null>(null)
   const [monitorError, setMonitorError] = useState<string | null>(null)
@@ -70,6 +78,19 @@ export function Dashboard(): React.JSX.Element {
       .finally(() => {
         if (isMounted()) setSessionsLoading(false)
       })
+  }
+
+  const showSessionSummary = (sessionId: string): void => {
+    setSelectedSessionId(sessionId)
+    setSessionSummary(null)
+    setSummaryError(null)
+    setSummaryLoading(true)
+
+    window.gamesense
+      .getSessionPerformanceSummary(sessionId)
+      .then(setSessionSummary)
+      .catch(() => setSummaryError('Không thể tải tổng kết phiên game.'))
+      .finally(() => setSummaryLoading(false))
   }
 
   useEffect(() => {
@@ -229,6 +250,11 @@ export function Dashboard(): React.JSX.Element {
               loading={sessionsLoading}
               error={sessionsError}
               onRefresh={() => refreshSessions()}
+              selectedSessionId={selectedSessionId}
+              summary={sessionSummary}
+              summaryLoading={summaryLoading}
+              summaryError={summaryError}
+              onSelectSession={showSessionSummary}
             />
           ) : (
             <>
@@ -375,18 +401,112 @@ export function Dashboard(): React.JSX.Element {
   )
 }
 
+function formatMetric(value: number | null): string {
+  return value === null ? '—' : `${value.toFixed(1)}%`
+}
+
+interface SessionSummaryPanelProps {
+  summary: SessionPerformanceSummary | null
+  loading: boolean
+  error: string | null
+}
+
+function SessionSummaryPanel({
+  summary,
+  loading,
+  error,
+}: SessionSummaryPanelProps): React.JSX.Element {
+  return (
+    <section className="rounded-xl border border-indigo-400/20 bg-indigo-400/[0.05] p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-indigo-300/70">
+            Performance Analyzer
+          </p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-100">
+            Session summary
+          </h3>
+        </div>
+        {summary && (
+          <p className="text-xs text-slate-500">
+            {summary.totalSampleCount} total samples
+          </p>
+        )}
+      </div>
+
+      {loading ? (
+        <p className="mt-4 text-sm text-slate-400">Calculating metrics...</p>
+      ) : error ? (
+        <p className="mt-4 text-sm text-red-400">{error}</p>
+      ) : summary ? (
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <MetricSummaryCard
+            label="CPU usage"
+            summary={summary.cpuUsagePercent}
+          />
+          <MetricSummaryCard
+            label="Memory usage"
+            summary={summary.memoryUsagePercent}
+          />
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function MetricSummaryCard({
+  label,
+  summary,
+}: {
+  label: string
+  summary: SessionPerformanceSummary['cpuUsagePercent']
+}): React.JSX.Element {
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/10 p-4">
+      <p className="text-xs uppercase tracking-wider text-slate-500">{label}</p>
+      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <p className="text-slate-500">Average</p>
+          <p className="mt-1 font-medium text-slate-200">
+            {formatMetric(summary.average)}
+          </p>
+        </div>
+        <div>
+          <p className="text-slate-500">Peak</p>
+          <p className="mt-1 font-medium text-slate-200">
+            {formatMetric(summary.peak)}
+          </p>
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-slate-600">
+        {summary.sampleCount} valid samples
+      </p>
+    </div>
+  )
+}
+
 interface SessionsPanelProps {
   sessions: GameSession[]
   loading: boolean
   error: string | null
+  selectedSessionId: string | null
+  summary: SessionPerformanceSummary | null
+  summaryLoading: boolean
+  summaryError: string | null
   onRefresh: () => void
+  onSelectSession: (sessionId: string) => void
 }
 
 function SessionsPanel({
   sessions,
   loading,
   error,
+  selectedSessionId,
+  summary,
+  summaryLoading,
+  summaryError,
   onRefresh,
+  onSelectSession,
 }: SessionsPanelProps): React.JSX.Element {
   const now = Date.now()
 
@@ -411,6 +531,14 @@ function SessionsPanel({
           {loading ? 'Loading...' : 'Refresh'}
         </button>
       </div>
+
+      {selectedSessionId && (
+        <SessionSummaryPanel
+          summary={summary}
+          loading={summaryLoading}
+          error={summaryError}
+        />
+      )}
 
       <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
         {loading ? (
@@ -464,6 +592,14 @@ function SessionsPanel({
                   >
                     {isRunning ? 'Running' : 'Stopped'}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => onSelectSession(item.id)}
+                    className="w-fit rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-white/5"
+                    aria-pressed={selectedSessionId === item.id}
+                  >
+                    {selectedSessionId === item.id ? 'Selected' : 'Analyze'}
+                  </button>
                 </div>
               )
             })}

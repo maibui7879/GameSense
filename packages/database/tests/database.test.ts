@@ -196,6 +196,41 @@ describe("GameSenseDatabase", () => {
     expect(database.listMetrics("session-1")).toEqual([metrics]);
   });
 
+  it("summarizes metric averages and peaks while ignoring null samples", () => {
+    const database = createDatabase();
+    database.saveSession(session());
+    database.insertMetrics("session-1", {
+      capturedAt: "2026-10-22T10:01:00.000Z",
+      cpuUsagePercent: 20,
+      memoryUsagePercent: null,
+    });
+    database.insertMetrics("session-1", {
+      capturedAt: "2026-10-22T10:02:00.000Z",
+      cpuUsagePercent: null,
+      memoryUsagePercent: 60,
+    });
+    database.insertMetrics("session-1", {
+      capturedAt: "2026-10-22T10:03:00.000Z",
+      cpuUsagePercent: 40,
+      memoryUsagePercent: 80,
+    });
+
+    expect(database.getSessionPerformanceSummary("session-1")).toEqual({
+      sessionId: "session-1",
+      cpuUsagePercent: {
+        average: 30,
+        peak: 40,
+        sampleCount: 2,
+      },
+      memoryUsagePercent: {
+        average: 70,
+        peak: 80,
+        sampleCount: 2,
+      },
+      totalSampleCount: 3,
+    });
+  });
+
   it("rejects metrics outside the percentage range", () => {
     const database = createDatabase();
 

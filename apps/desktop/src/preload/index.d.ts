@@ -1,5 +1,8 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
-import type { GameSession } from '@gamesense/contracts'
+import type {
+  GameSession,
+  SessionPerformanceSummary,
+} from '@gamesense/contracts'
 
 export interface GameSenseAPI {
   getAppInfo: () => Promise<{
@@ -13,6 +16,10 @@ export interface GameSenseAPI {
   getSessionHistory: () => Promise<GameSession[]>
 
   getSessionCount: () => Promise<number>
+
+  getSessionPerformanceSummary: (
+    sessionId: string
+  ) => Promise<SessionPerformanceSummary>
 
   onSessionChange: (
     callback: (session: GameSession) => void
