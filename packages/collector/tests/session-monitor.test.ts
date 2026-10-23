@@ -88,7 +88,10 @@ describe("SessionMonitor", () => {
   });
 
   it("restores a persisted running session when the process is still active", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-21T10:05:00.000Z"));
     const scanner = createScanner(detected(15056));
+    const onSessionHeartbeat = vi.fn();
     const restored: GameSession = {
       id: "persisted-session",
       gameId: "stella-sora",
@@ -103,11 +106,20 @@ describe("SessionMonitor", () => {
       definitions: [game],
       scanner,
       initialSession: restored,
+      onSessionHeartbeat,
     });
 
     await monitor.pollOnce();
 
-    expect(monitor.getCurrentSession()).toEqual(restored);
+    expect(monitor.getCurrentSession()).toMatchObject({
+      id: restored.id,
+      startedAt: restored.startedAt,
+      lastSeenAt: "2026-10-21T10:05:00.000Z",
+      status: "running",
+    });
+    expect(onSessionHeartbeat).toHaveBeenCalledWith(
+      expect.objectContaining({ lastSeenAt: "2026-10-21T10:05:00.000Z" }),
+    );
   });
 
   it("stops a restored session when its process is no longer active", async () => {
@@ -250,6 +262,7 @@ describe("SessionMonitor", () => {
       memoryUsagePercent: 50,
     });
     await collectionComplete;
+    await new Promise<void>((resolve) => setImmediate(resolve));
 
     expect(onMetrics).not.toHaveBeenCalled();
   });

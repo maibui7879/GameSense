@@ -131,6 +131,46 @@ describe("GameSenseDatabase", () => {
     });
   });
 
+  it("migrates a schema v2 database by adding last_seen_at", () => {
+    const directory = mkdtempSync(join(tmpdir(), "gamesense-db-"));
+    temporaryDirectories.push(directory);
+    const filename = join(directory, "gamesense.db");
+    const legacy = new BetterSqlite3(filename);
+
+    legacy.exec(`
+      CREATE TABLE game_sessions (
+        id TEXT PRIMARY KEY NOT NULL,
+        game_id TEXT NOT NULL,
+        pid INTEGER NOT NULL,
+        process_started_at TEXT,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        status TEXT NOT NULL
+      );
+      INSERT INTO game_sessions
+        (id, game_id, pid, process_started_at, started_at, ended_at, status)
+      VALUES
+        ('legacy-v2-session', 'stella-sora', 5678,
+         '2026-10-22T09:59:00.000Z', '2026-10-22T10:00:00.000Z', NULL, 'running');
+      PRAGMA user_version = 2;
+    `);
+    legacy.close();
+
+    const migrated = new GameSenseDatabase(filename);
+    databases.push(migrated);
+
+    expect(migrated.getSession("legacy-v2-session")).toEqual({
+      id: "legacy-v2-session",
+      gameId: "stella-sora",
+      pid: 5678,
+      processStartedAt: "2026-10-22T09:59:00.000Z",
+      startedAt: "2026-10-22T10:00:00.000Z",
+      lastSeenAt: "2026-10-22T10:00:00.000Z",
+      endedAt: null,
+      status: "running",
+    });
+  });
+
   it("lists sessions newest first", () => {
     const database = createDatabase();
     database.saveSession(session({

@@ -228,7 +228,7 @@ export function Dashboard(): React.JSX.Element {
               sessions={sessions}
               loading={sessionsLoading}
               error={sessionsError}
-              onRefresh={refreshSessions}
+              onRefresh={() => refreshSessions()}
             />
           ) : (
             <>
