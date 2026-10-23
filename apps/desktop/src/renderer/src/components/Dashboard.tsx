@@ -15,6 +15,8 @@ const NAV_ITEMS = [
   { id: 'settings', label: 'Settings', active: false }
 ] as const
 
+type DashboardView = 'overview' | 'sessions'
+
 function formatDuration(startedAt: string, endedAt: string | null, now: number): string {
   const start = new Date(startedAt).getTime()
   const end = endedAt ? new Date(endedAt).getTime() : now
@@ -38,6 +40,9 @@ function getGameName(gameId: string): string {
 export function Dashboard(): React.JSX.Element {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
   const [session, setSession] = useState<GameSession | null>(null)
+  const [sessions, setSessions] = useState<GameSession[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(true)
+  const [activeView, setActiveView] = useState<DashboardView>('overview')
   const [error, setError] = useState<string | null>(null)
   const [monitorError, setMonitorError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -55,6 +60,15 @@ export function Dashboard(): React.JSX.Element {
         setSession(nextSession)
         setMonitorError(null)
       }
+
+      window.gamesense
+        .getSessionHistory()
+        .then((history) => {
+          if (mounted) setSessions(history)
+        })
+        .catch(() => {
+          if (mounted) setMonitorError('Không thể tải lịch sử phiên game.')
+        })
     })
 
     const unsubscribeError = window.gamesense.onError((message) => {
@@ -85,6 +99,20 @@ export function Dashboard(): React.JSX.Element {
         if (mounted) {
           setMonitorError('Không thể lấy trạng thái phiên game.')
         }
+      })
+
+    window.gamesense
+      .getSessionHistory()
+      .then((history) => {
+        if (mounted) setSessions(history)
+      })
+      .catch(() => {
+        if (mounted) {
+          setMonitorError('Không thể tải lịch sử phiên game.')
+        }
+      })
+      .finally(() => {
+        if (mounted) setSessionsLoading(false)
       })
 
     const clock = window.setInterval(() => {
@@ -137,11 +165,19 @@ export function Dashboard(): React.JSX.Element {
             <button
               key={item.id}
               type="button"
+              disabled={item.id !== 'overview' && item.id !== 'sessions'}
+              onClick={() => {
+                if (item.id === 'overview' || item.id === 'sessions') {
+                  setActiveView(item.id)
+                }
+              }}
               className={
                 'w-full rounded-lg px-4 py-2.5 text-left text-sm transition-colors ' +
-                (item.active
+                (activeView === item.id
                   ? 'bg-indigo-500/15 font-medium text-indigo-300'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200')
+                  : item.id === 'overview' || item.id === 'sessions'
+                    ? 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                    : 'cursor-not-allowed text-slate-600')
               }
             >
               {item.label}
@@ -160,7 +196,7 @@ export function Dashboard(): React.JSX.Element {
         <header className="flex items-center justify-between border-b border-white/10 px-8 py-5">
           <div>
             <p className="text-xs uppercase tracking-widest text-slate-500">
-              GameSense / Overview
+              GameSense / {activeView === 'sessions' ? 'Sessions' : 'Overview'}
             </p>
             <h1 className="mt-1 text-2xl font-semibold">Gaming Dashboard</h1>
           </div>
@@ -184,6 +220,20 @@ export function Dashboard(): React.JSX.Element {
 
         {/* Content */}
         <main className="flex-1 space-y-6 overflow-y-auto p-8">
+          {activeView === 'sessions' ? (
+            <SessionsPanel
+              sessions={sessions}
+              loading={sessionsLoading}
+              onRefresh={() => {
+                setSessionsLoading(true)
+                window.gamesense
+                  .getSessionHistory()
+                  .then(setSessions)
+                  .finally(() => setSessionsLoading(false))
+              }}
+            />
+          ) : (
+            <>
           {/* Desktop Runtime */}
           <section className="rounded-xl border border-white/10 bg-white/[0.03] p-6">
             <h2 className="text-sm font-medium uppercase tracking-wider text-slate-400">
@@ -232,9 +282,9 @@ export function Dashboard(): React.JSX.Element {
               <p className="text-xs uppercase tracking-wider text-slate-500">
                 Sessions
               </p>
-              <p className="mt-2 text-3xl font-semibold text-slate-100">—</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-100">{sessions.length}</p>
               <p className="mt-2 text-xs text-slate-500">
-                Session history not available yet
+                Saved game sessions
               </p>
             </div>
 
@@ -317,8 +367,105 @@ export function Dashboard(): React.JSX.Element {
               </ul>
             </div>
           </section>
+            </>
+          )}
         </main>
       </div>
     </div>
+  )
+}
+
+interface SessionsPanelProps {
+  sessions: GameSession[]
+  loading: boolean
+  onRefresh: () => void
+}
+
+function SessionsPanel({
+  sessions,
+  loading,
+  onRefresh,
+}: SessionsPanelProps): React.JSX.Element {
+  const now = Date.now()
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-slate-500">
+            GameSense / Sessions
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold">Session History</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Lịch sử các phiên game được lưu trên thiết bị này.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 disabled:cursor-wait disabled:opacity-50"
+        >
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+        {loading ? (
+          <p className="p-6 text-sm text-slate-500">Đang tải lịch sử phiên...</p>
+        ) : sessions.length === 0 ? (
+          <p className="p-6 text-sm text-slate-500">Chưa có phiên game nào.</p>
+        ) : (
+          <div className="divide-y divide-white/10">
+            {sessions.map((item) => {
+              const isRunning = item.status === 'running'
+
+              return (
+                <div
+                  key={item.id}
+                  className="grid gap-4 px-6 py-5 md:grid-cols-[1.4fr_1fr_1fr_auto] md:items-center"
+                >
+                  <div>
+                    <p className="font-medium text-slate-200">
+                      {getGameName(item.gameId)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      PID {item.pid} · Bắt đầu {new Date(item.startedAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-slate-500">
+                      Duration
+                    </p>
+                    <p className="mt-1 text-sm text-slate-300">
+                      {formatDuration(item.startedAt, item.endedAt, now)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-slate-500">
+                      Ended
+                    </p>
+                    <p className="mt-1 text-sm text-slate-300">
+                      {item.endedAt
+                        ? new Date(item.endedAt).toLocaleString()
+                        : 'In progress'}
+                    </p>
+                  </div>
+                  <span
+                    className={`w-fit rounded-full px-2.5 py-1 text-xs ${
+                      isRunning
+                        ? 'bg-emerald-400/10 text-emerald-300'
+                        : 'bg-slate-400/10 text-slate-400'
+                    }`}
+                  >
+                    {isRunning ? 'Running' : 'Stopped'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </section>
   )
 }

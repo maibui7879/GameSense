@@ -12,6 +12,7 @@ import { GameSenseDatabase } from '@gamesense/database'
 
 import {
   getCurrentGameSession,
+  getGameSessionHistory,
   startGameMonitor,
   stopGameMonitor,
   subscribeToGameMonitor
@@ -90,6 +91,12 @@ ipcMain.handle('game:get-session', (event) => {
   assertTrustedSender(event)
 
   return getCurrentGameSession()
+})
+
+ipcMain.handle('game:list-sessions', (event) => {
+  assertTrustedSender(event)
+
+  return getGameSessionHistory()
 })
 
 app.whenReady().then(() => {

@@ -102,6 +102,10 @@ export function getCurrentGameSession(): GameSession | null {
   return monitor?.getCurrentSession() ?? null
 }
 
+export function getGameSessionHistory(): GameSession[] {
+  return database?.listSessions({ limit: 100 }) ?? []
+}
+
 export function subscribeToGameMonitor(
   listener: MonitorListener,
 ): () => void {

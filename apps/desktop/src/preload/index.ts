@@ -14,6 +14,9 @@ const gamesense = {
   getSessionStatus: (): Promise<GameSession | null> =>
     ipcRenderer.invoke('game:get-session'),
 
+  getSessionHistory: (): Promise<GameSession[]> =>
+    ipcRenderer.invoke('game:list-sessions'),
+
   onSessionChange: (
     callback: (session: GameSession) => void
   ): (() => void) => {
